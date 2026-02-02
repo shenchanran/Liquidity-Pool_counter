@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Uniswap V3 LP 监控面板 (全精度版)</title>
+    <title>Uniswap V3 LP 监控面板 (专业版)</title>
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
     
     <style>
-        body { background-color: #f8f9fa; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+        body { background-color: #f4f6f8; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
         
         /* 进度条 */
         .range-track {
@@ -39,16 +39,24 @@
         
         .data-label { font-size: 0.8rem; color: #6c757d; margin-bottom: 1px; }
         
-        /* 字体优化：使用等宽字体显示数字，防止数字抖动，字体稍微调小以容纳长数字 */
+        /* 字体优化 */
         .font-mono { 
             font-family: 'Consolas', 'Monaco', 'Courier New', monospace; 
             letter-spacing: -0.3px; 
             font-size: 0.85rem; 
-            word-break: break-all; /* 允许长数字换行，防止撑破页面 */
+            word-break: break-all;
         }
 
         .table-hover tbody tr:hover { background-color: rgba(0,0,0,0.02); }
         .fs-7 { font-size: 0.85rem; }
+
+        /* 统计看板样式 */
+        .summary-card {
+            background: linear-gradient(145deg, #ffffff, #f0f2f5);
+            border: 1px solid #e9ecef;
+        }
+        .summary-label { font-size: 0.85rem; color: #6c757d; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+        .summary-value { font-size: 1.5rem; font-weight: 700; font-family: 'Consolas', monospace; color: #212529; }
     </style>
 </head>
 <body>
@@ -65,15 +73,42 @@
     </div>
 
     <header class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
-        <h4 class="m-0 text-primary fw-bold"><i class="bi bi-activity"></i> Uniswap V3 监控 <span class="badge bg-dark fs-7 align-top ms-2">全精度</span></h4>
+        <h4 class="m-0 text-primary fw-bold"><i class="bi bi-activity"></i> LP 资产看板 <span class="badge bg-dark fs-7 align-top ms-2">全精度</span></h4>
         <span class="badge bg-light text-secondary border" v-if="lastUpdated">
-            <i class="bi bi-clock"></i> {{ lastUpdated }}
+            <i class="bi bi-clock"></i> 更新: {{ lastUpdated }}
         </span>
     </header>
 
+    <div class="card shadow-sm mb-4 border-0 summary-card" v-if="positions.length > 0">
+        <div class="card-body p-4">
+            <div class="row g-4 text-center text-md-start">
+                <div class="col-6 col-md-3 border-end-md">
+                    <div class="summary-label">总投入成本 (USD)</div>
+                    <div class="summary-value text-secondary">${{ formatFull(summary.totalCost) }}</div>
+                </div>
+                <div class="col-6 col-md-3 border-end-md">
+                    <div class="summary-label">当前总价值 (USD)</div>
+                    <div class="summary-value text-dark">${{ formatFull(summary.totalValue) }}</div>
+                </div>
+                <div class="col-6 col-md-3 border-end-md">
+                    <div class="summary-label">总盈亏 (PNL)</div>
+                    <div class="summary-value" :class="getPnlClass(summary.totalPnl)">
+                        {{ isPositive(summary.totalPnl) ? '+' : '' }}{{ formatFull(summary.totalPnl) }}
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="summary-label">总回报率 (ROI)</div>
+                    <div class="summary-value" :class="getPnlClass(summary.totalPnl)">
+                        {{ formatFull(summary.totalRoi) }}%
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="card shadow-sm mb-4 border-0">
         <div class="card-body bg-white rounded p-3 p-md-4">
-            <h5 class="card-title mb-3 fw-bold"><i class="bi bi-plus-circle"></i> 添加监控</h5>
+            <h6 class="card-title mb-3 fw-bold text-muted"><i class="bi bi-plus-circle"></i> 添加新仓位</h6>
             <div class="row g-2 g-md-3">
                 <div class="col-6 col-md-2">
                     <label class="form-label small text-muted fw-bold">Chain <span class="text-danger">*</span></label>
@@ -93,7 +128,7 @@
                     <input type="number" class="form-control form-control-sm" v-model="form.tokenId" placeholder="NFT ID">
                 </div>
                 <div class="col-12 col-md-3">
-                    <label class="form-label small text-muted fw-bold">成本 (USD)</label>
+                    <label class="form-label small text-muted fw-bold">投入成本 (USD)</label>
                     <input type="number" class="form-control form-control-sm" v-model="form.costUsd" placeholder="0.00">
                 </div>
                 <div class="col-12 col-md-2 d-flex align-items-end gap-2">
@@ -112,6 +147,7 @@
                         <th>信息</th>
                         <th style="width: 28%">价格区间 (Min / Curr / Max)</th>
                         <th>状态</th>
+                        <th class="text-end">投入成本 (USD)</th>
                         <th>资产详情 (数量+未领手续费)</th>
                         <th>总价值 & PNL</th>
                         <th>操作</th>
@@ -146,6 +182,11 @@
                                 </span>
                             </div>
                         </td>
+                        
+                        <td class="text-end font-mono text-muted">
+                            ${{ formatFull(item.costUsd) }}
+                        </td>
+
                         <td class="fs-7">
                             <div v-if="item.data">
                                 <div class="d-flex justify-content-between">
@@ -189,7 +230,7 @@
                     </tr>
                 </tbody>
             </table>
-            <div v-if="positions.length === 0" class="text-center py-5 text-muted">暂无数据</div>
+            <div v-if="positions.length === 0" class="text-center py-5 text-muted">暂无数据，请添加仓位</div>
         </div>
     </div>
 
@@ -208,19 +249,27 @@
                 <div v-if="item.loading" class="text-center py-2"><div class="spinner-border spinner-border-sm text-primary"></div></div>
                 <div v-else-if="item.error" class="text-danger text-center">失败</div>
                 <div v-else>
-                    <div class="row mb-2">
+                    <div class="row mb-2 pb-2 border-bottom border-light">
                         <div class="col-6">
-                            <div class="data-label">总价值 (USD)</div>
-                            <div class="fw-bold text-dark font-mono">${{ formatFull(item.data.totalValueUsd) }}</div>
+                             <div class="data-label">投入成本</div>
+                             <div class="font-mono text-muted">${{ formatFull(item.costUsd) }}</div>
                         </div>
                         <div class="col-6 text-end">
-                            <div class="data-label">利润 (ROI)</div>
-                            <div :class="getPnlClass(item.data.pnlUsd)" class="fw-bold font-mono small">
-                                {{ isPositive(item.data.pnlUsd) ? '+' : '' }}{{ formatFull(item.data.pnlUsd) }}<br>
-                                ({{ formatFull(item.data.roiPercent) }}%)
-                            </div>
+                             <div class="data-label">当前价值</div>
+                             <div class="font-mono fw-bold text-dark">${{ formatFull(item.data.totalValueUsd) }}</div>
                         </div>
                     </div>
+
+                    <div class="row mb-2">
+                        <div class="col-12 d-flex justify-content-between align-items-center">
+                            <span class="data-label">盈亏 (ROI)</span>
+                            <span :class="getPnlClass(item.data.pnlUsd)" class="fw-bold font-mono">
+                                {{ isPositive(item.data.pnlUsd) ? '+' : '' }}{{ formatFull(item.data.pnlUsd) }}
+                                <span class="small">({{ formatFull(item.data.roiPercent) }}%)</span>
+                            </span>
+                        </div>
+                    </div>
+
                     <div class="mb-3">
                         <div class="d-flex justify-content-between small text-muted mb-1 font-mono" style="font-size: 0.75rem;">
                             <span>{{ formatFull(item.data.range.minPrice) }}</span>
@@ -256,11 +305,11 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/decimal.js/10.4.3/decimal.min.js"></script>
 
 <script>
-    const { createApp, ref, onMounted } = Vue;
+    const { createApp, ref, computed, onMounted } = Vue;
 
     createApp({
         setup() {
-            // 配置 decimal.js 避免科学计数法，允许超长小数
+            // 配置 decimal.js 
             Decimal.set({ toExpNeg: -100, toExpPos: 100 });
 
             const API_BASE = 'http://localhost:3000/analyze';
@@ -271,6 +320,36 @@
             const lastUpdated = ref('');
             const toastMessage = ref('');
             let bsToast = null;
+
+            // --- 核心计算属性：统计汇总 ---
+            const summary = computed(() => {
+                let totalCost = new Decimal(0);
+                let totalValue = new Decimal(0);
+                
+                positions.value.forEach(p => {
+                    // 累加成本 (无论是否加载成功，成本是已知的)
+                    if (p.costUsd) {
+                        totalCost = totalCost.plus(new Decimal(p.costUsd));
+                    }
+                    // 累加当前价值 (只算加载成功的)
+                    if (p.data && p.data.totalValueUsd) {
+                        totalValue = totalValue.plus(new Decimal(p.data.totalValueUsd));
+                    }
+                });
+
+                const totalPnl = totalValue.minus(totalCost);
+                let totalRoi = new Decimal(0);
+                if (!totalCost.isZero()) {
+                    totalRoi = totalPnl.div(totalCost).mul(100);
+                }
+
+                return {
+                    totalCost: totalCost.toString(),
+                    totalValue: totalValue.toString(),
+                    totalPnl: totalPnl.toString(),
+                    totalRoi: totalRoi.toFixed(8).toString()
+                };
+            });
 
             const loadStorage = () => {
                 const data = localStorage.getItem(STORAGE_KEY);
@@ -299,6 +378,7 @@
                         if (json.success) {
                             pos.data = json.data;
                             pos.loading = false;
+                            pos.error = false; // <--- 关键修复：成功时重置错误状态
                         } else throw new Error(json.error);
                     } catch (err) {
                         pos.loading = false;
@@ -321,28 +401,15 @@
 
             const clearForm = () => { form.value.tokenId = ''; form.value.costUsd = ''; };
 
-            /* --- 核心修改：全精度格式化工具 --- */
-            
-            // 这是一个不进行任何截断的格式化函数
-            // 即使是 0.000000012345678 也会完整显示，只增加千分位逗号
             const formatFull = (val) => {
                 if (val === null || val === undefined || val === '') return '--';
-                
                 try {
                     const d = new Decimal(val);
-                    // toFixed() 不带参数会返回完整的字符串，不会科学计数法（因为上面设置了 config）
                     const str = d.toFixed(); 
-                    
-                    // 分割整数和小数
                     const parts = str.split('.');
-                    // 整数部分加逗号
                     parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-                    
-                    // 重新拼接
                     return parts.join('.');
-                } catch (e) {
-                    return val;
-                }
+                } catch (e) { return val; }
             };
 
             const isPositive = (val) => new Decimal(val || 0).gte(0);
@@ -363,7 +430,7 @@
 
             onMounted(() => { loadStorage(); if (positions.value.length > 0) fetchData(); setInterval(fetchData, 30000); });
 
-            return { form, positions, lastUpdated, toastMessage, addPosition, removePosition, clearForm, formatFull, getPnlClass, getProgress, isPositive, capitalize };
+            return { form, positions, summary, lastUpdated, toastMessage, addPosition, removePosition, clearForm, formatFull, getPnlClass, getProgress, isPositive, capitalize };
         }
     }).mount('#app');
 </script>
