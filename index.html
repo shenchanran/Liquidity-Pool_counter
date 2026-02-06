@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Uniswap V3 LP 监控面板 (专业版)</title>
+    <title>Uniswap V3 LP 监控面板 (双重APR版)</title>
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
@@ -73,7 +73,7 @@
     </div>
 
     <header class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
-        <h4 class="m-0 text-primary fw-bold"><i class="bi bi-activity"></i> LP 资产看板 <span class="badge bg-dark fs-7 align-top ms-2">全精度</span></h4>
+        <h4 class="m-0 text-primary fw-bold"><i class="bi bi-activity"></i> LP 资产看板 <span class="badge bg-dark fs-7 align-top ms-2">双重APR</span></h4>
         <span class="badge bg-light text-secondary border" v-if="lastUpdated">
             <i class="bi bi-clock"></i> 更新: {{ lastUpdated }}
         </span>
@@ -123,13 +123,17 @@
                         <option value="uniswap">Uniswap</option>
                     </select>
                 </div>
-                <div class="col-12 col-md-3">
+                <div class="col-12 col-md-2">
                     <label class="form-label small text-muted fw-bold">Token ID <span class="text-danger">*</span></label>
                     <input type="number" class="form-control form-control-sm" v-model="form.tokenId" placeholder="NFT ID">
                 </div>
-                <div class="col-12 col-md-3">
-                    <label class="form-label small text-muted fw-bold">投入成本 (USD)</label>
+                <div class="col-6 col-md-2">
+                    <label class="form-label small text-muted fw-bold">成本 (USD)</label>
                     <input type="number" class="form-control form-control-sm" v-model="form.costUsd" placeholder="0.00">
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label small text-muted fw-bold">添加时间</label>
+                    <input type="datetime-local" class="form-control form-control-sm" v-model="form.addTime">
                 </div>
                 <div class="col-12 col-md-2 d-flex align-items-end gap-2">
                     <button class="btn btn-sm btn-primary flex-grow-1 fw-bold" @click="addPosition">添加</button>
@@ -145,10 +149,11 @@
                 <thead class="table-light">
                     <tr class="text-secondary small text-nowrap">
                         <th>信息</th>
-                        <th style="width: 28%">价格区间 (Min / Curr / Max)</th>
+                        <th style="width: 20%">价格区间</th>
                         <th>状态</th>
-                        <th class="text-end">投入成本 (USD)</th>
-                        <th>资产详情 (数量+未领手续费)</th>
+                        <th class="text-end">成本</th>
+                        <th>资产详情</th>
+                        <th class="text-end" style="min-width: 140px;">年化收益 (APR)</th>
                         <th>总价值 & PNL</th>
                         <th>操作</th>
                     </tr>
@@ -207,11 +212,30 @@
                                         </span>
                                     </span>
                                 </div>
-                                <div class="text-end text-success small border-top mt-1 pt-1 fw-bold font-mono">
-                                    Fees: ${{ formatFull(item.data.holdings.fees.feeValueUsd) }}
-                                </div>
                             </div>
                         </td>
+                        
+                        <td class="text-end">
+                            <div v-if="item.data && item.addTime">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <span class="badge bg-light text-secondary border me-2" style="font-weight: normal; font-size: 0.7rem;">总盈亏</span>
+                                    <span class="fw-bold font-mono" :class="getPnlClass(item.data.pnlUsd)">
+                                        {{ getTotalApr(item) }}%
+                                    </span>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 me-2" style="font-weight: normal; font-size: 0.7rem;">仅手续费</span>
+                                    <span class="fw-bold font-mono text-success">
+                                        {{ getFeeApr(item) }}%
+                                    </span>
+                                </div>
+                                <div class="small text-muted font-mono text-end mt-1 pt-1 border-top" style="font-size: 0.75rem;">
+                                    持有: {{ getDays(item) }}天
+                                </div>
+                            </div>
+                            <div v-else class="text-muted small text-center">--</div>
+                        </td>
+
                         <td>
                             <div v-if="item.data">
                                 <div class="fw-bold font-mono">${{ formatFull(item.data.totalValueUsd) }}</div>
@@ -260,13 +284,24 @@
                         </div>
                     </div>
 
-                    <div class="row mb-2">
-                        <div class="col-12 d-flex justify-content-between align-items-center">
-                            <span class="data-label">盈亏 (ROI)</span>
-                            <span :class="getPnlClass(item.data.pnlUsd)" class="fw-bold font-mono">
+                    <div class="row mb-3">
+                        <div class="col-4">
+                            <span class="data-label">总盈亏</span>
+                            <div :class="getPnlClass(item.data.pnlUsd)" class="fw-bold font-mono small">
                                 {{ isPositive(item.data.pnlUsd) ? '+' : '' }}{{ formatFull(item.data.pnlUsd) }}
-                                <span class="small">({{ formatFull(item.data.roiPercent) }}%)</span>
-                            </span>
+                            </div>
+                        </div>
+                        <div class="col-4 text-center border-start border-end">
+                            <span class="data-label">总年化</span>
+                            <div class="fw-bold font-mono small" :class="getPnlClass(item.data.pnlUsd)">
+                                {{ getTotalApr(item) }}%
+                            </div>
+                        </div>
+                        <div class="col-4 text-end">
+                            <span class="data-label">费率年化</span>
+                            <div class="fw-bold font-mono small text-success">
+                                {{ getFeeApr(item) }}%
+                            </div>
                         </div>
                     </div>
 
@@ -278,19 +313,6 @@
                         <div class="text-center font-mono text-primary fw-bold small mb-1">{{ formatFull(item.data.priceUsd) }}</div>
                         <div class="range-track">
                             <div class="range-cursor" :style="{ left: getProgress(item) + '%' }"></div>
-                        </div>
-                    </div>
-                    <div class="bg-light p-2 rounded small font-mono">
-                        <div class="d-flex justify-content-between mb-1">
-                            <span>{{ item.data.holdings.stableSymbol }}</span>
-                            <span>{{ formatFull(item.data.holdings.liquidity.stable) }}</span>
-                        </div>
-                        <div class="d-flex justify-content-between">
-                            <span>{{ item.data.holdings.volatileSymbol }}</span>
-                            <span>{{ formatFull(item.data.holdings.liquidity.volatile) }}</span>
-                        </div>
-                        <div class="text-end text-success mt-1 pt-1 border-top fw-bold">
-                            Fee: ${{ formatFull(item.data.holdings.fees.feeValueUsd) }}
                         </div>
                     </div>
                 </div>
@@ -309,39 +331,29 @@
 
     createApp({
         setup() {
-            // 配置 decimal.js 
             Decimal.set({ toExpNeg: -100, toExpPos: 100 });
 
             const API_BASE = 'http://localhost:3000/analyze';
-            const STORAGE_KEY = 'v3_positions_full_precision';
+            const STORAGE_KEY = 'v3_positions_apr_v2'; // 升级Key避免缓存冲突
 
-            const form = ref({ chain: 'bsc', protocol: 'pancake', tokenId: '', costUsd: '' });
+            const form = ref({ chain: 'bsc', protocol: 'pancake', tokenId: '', costUsd: '', addTime: '' });
             const positions = ref([]);
             const lastUpdated = ref('');
             const toastMessage = ref('');
             let bsToast = null;
 
-            // --- 核心计算属性：统计汇总 ---
             const summary = computed(() => {
                 let totalCost = new Decimal(0);
                 let totalValue = new Decimal(0);
                 
                 positions.value.forEach(p => {
-                    // 累加成本 (无论是否加载成功，成本是已知的)
-                    if (p.costUsd) {
-                        totalCost = totalCost.plus(new Decimal(p.costUsd));
-                    }
-                    // 累加当前价值 (只算加载成功的)
-                    if (p.data && p.data.totalValueUsd) {
-                        totalValue = totalValue.plus(new Decimal(p.data.totalValueUsd));
-                    }
+                    if (p.costUsd) totalCost = totalCost.plus(new Decimal(p.costUsd));
+                    if (p.data && p.data.totalValueUsd) totalValue = totalValue.plus(new Decimal(p.data.totalValueUsd));
                 });
 
                 const totalPnl = totalValue.minus(totalCost);
                 let totalRoi = new Decimal(0);
-                if (!totalCost.isZero()) {
-                    totalRoi = totalPnl.div(totalCost).mul(100);
-                }
+                if (!totalCost.isZero()) totalRoi = totalPnl.div(totalCost).mul(100);
 
                 return {
                     totalCost: totalCost.toString(),
@@ -353,11 +365,25 @@
 
             const loadStorage = () => {
                 const data = localStorage.getItem(STORAGE_KEY);
-                if (data) positions.value = JSON.parse(data).map(p => ({ ...p, loading: true, error: false, data: null, key: `${p.protocol}-${p.tokenId}` }));
+                if (data) {
+                    positions.value = JSON.parse(data).map(p => ({ 
+                        ...p, 
+                        loading: true, 
+                        error: false, 
+                        data: null, 
+                        key: `${p.protocol}-${p.tokenId}` 
+                    }));
+                }
             };
 
             const saveStorage = () => {
-                const toSave = positions.value.map(p => ({ chain: p.chain, protocol: p.protocol, tokenId: p.tokenId, costUsd: p.costUsd }));
+                const toSave = positions.value.map(p => ({ 
+                    chain: p.chain, 
+                    protocol: p.protocol, 
+                    tokenId: p.tokenId, 
+                    costUsd: p.costUsd,
+                    addTime: p.addTime 
+                }));
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
             };
 
@@ -378,7 +404,7 @@
                         if (json.success) {
                             pos.data = json.data;
                             pos.loading = false;
-                            pos.error = false; // <--- 关键修复：成功时重置错误状态
+                            pos.error = false;
                         } else throw new Error(json.error);
                     } catch (err) {
                         pos.loading = false;
@@ -388,10 +414,28 @@
             };
 
             const addPosition = () => {
-                if (!form.value.chain || !form.value.protocol || !form.value.tokenId) return showToast('请补全所有必填项');
+                if (!form.value.chain || !form.value.protocol || !form.value.tokenId) return showToast('请补全Chain, Protocol, ID');
+                
+                const inputTime = form.value.addTime || new Date().toISOString().slice(0, 16);
+
                 const exists = positions.value.find(p => p.protocol === form.value.protocol && p.tokenId == form.value.tokenId);
-                if (exists) { exists.costUsd = form.value.costUsd; exists.loading = true; }
-                else positions.value.push({ chain: form.value.chain, protocol: form.value.protocol, tokenId: form.value.tokenId, costUsd: form.value.costUsd || '0', loading: true, error: false, data: null, key: `${form.value.protocol}-${form.value.tokenId}` });
+                if (exists) { 
+                    exists.costUsd = form.value.costUsd; 
+                    exists.addTime = inputTime; 
+                    exists.loading = true; 
+                } else {
+                    positions.value.push({ 
+                        chain: form.value.chain, 
+                        protocol: form.value.protocol, 
+                        tokenId: form.value.tokenId, 
+                        costUsd: form.value.costUsd || '0', 
+                        addTime: inputTime,
+                        loading: true, 
+                        error: false, 
+                        data: null, 
+                        key: `${form.value.protocol}-${form.value.tokenId}` 
+                    });
+                }
                 saveStorage(); clearForm(); fetchData();
             };
 
@@ -399,7 +443,52 @@
                 if(confirm(`确认删除?`)) { positions.value = positions.value.filter(p => p.key !== item.key); saveStorage(); }
             };
 
-            const clearForm = () => { form.value.tokenId = ''; form.value.costUsd = ''; };
+            const clearForm = () => { 
+                form.value.tokenId = ''; 
+                form.value.costUsd = ''; 
+                form.value.addTime = '';
+            };
+
+            /* --- 核心计算 --- */
+
+            const getDays = (item) => {
+                if (!item.addTime) return 0;
+                const now = new Date().getTime();
+                const start = new Date(item.addTime).getTime();
+                const diffMs = now - start;
+                return (diffMs / (1000 * 60 * 60 * 24)).toFixed(2);
+            };
+
+            // 1. 总APR (基于总盈亏 PNL)
+            const getTotalApr = (item) => {
+                if (!item.data || !item.costUsd || Number(item.costUsd) === 0 || !item.addTime) return '0.00';
+                const days = parseFloat(getDays(item));
+                if (days < 0.04) return '0.00'; 
+
+                const pnl = new Decimal(item.data.pnlUsd);
+                const cost = new Decimal(item.costUsd);
+                const roi = pnl.div(cost);
+                const apr = roi.div(days).mul(365).mul(100);
+
+                return apr.toFixed(2);
+            };
+
+            // 2. 手续费APR (基于纯手续费收入 FeeValue)
+            const getFeeApr = (item) => {
+                if (!item.data || !item.costUsd || Number(item.costUsd) === 0 || !item.addTime) return '0.00';
+                const days = parseFloat(getDays(item));
+                if (days < 0.04) return '0.00'; 
+
+                // 获取纯手续费价值
+                const feeVal = new Decimal(item.data.holdings.fees.feeValueUsd || 0);
+                const cost = new Decimal(item.costUsd);
+                
+                // 纯手续费回报率
+                const feeRoi = feeVal.div(cost);
+                const feeApr = feeRoi.div(days).mul(365).mul(100);
+
+                return feeApr.toFixed(2);
+            };
 
             const formatFull = (val) => {
                 if (val === null || val === undefined || val === '') return '--';
@@ -428,9 +517,18 @@
                 return price.minus(min).div(range).mul(100).toNumber();
             };
 
-            onMounted(() => { loadStorage(); if (positions.value.length > 0) fetchData(); setInterval(fetchData, 30000); });
+            onMounted(() => { 
+                loadStorage(); 
+                if (positions.value.length > 0) fetchData(); 
+                setInterval(fetchData, 30000); 
+            });
 
-            return { form, positions, summary, lastUpdated, toastMessage, addPosition, removePosition, clearForm, formatFull, getPnlClass, getProgress, isPositive, capitalize };
+            return { 
+                form, positions, summary, lastUpdated, toastMessage, 
+                addPosition, removePosition, clearForm, 
+                formatFull, getPnlClass, getProgress, isPositive, capitalize,
+                getDays, getTotalApr, getFeeApr
+            };
         }
     }).mount('#app');
 </script>
