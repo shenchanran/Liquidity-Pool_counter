@@ -151,9 +151,9 @@
                         <th>信息</th>
                         <th style="width: 20%">价格区间</th>
                         <th>状态</th>
-                        <th class="text-end">成本</th>
-                        <th>资产详情</th>
-                        <th class="text-end" style="min-width: 150px;">APR & 回本</th>
+                        <th >成本</th>
+                        <th>资产详情/手续费</th>
+                        <th style="min-width: 150px;">APR & 回本</th>
                         <th>总价值 & PNL</th>
                         <th>操作</th>
                     </tr>
@@ -188,7 +188,7 @@
                             </div>
                         </td>
                         
-                        <td class="text-end font-mono text-muted">
+                        <td class="font-mono text-muted">
                             ${{ formatFull(item.costUsd) }}
                         </td>
 
@@ -199,7 +199,7 @@
                                     <span class="font-mono">
                                         {{ formatFull(item.data.holdings.liquidity.stable) }}
                                         <span class="text-success ms-1 small" v-if="Number(item.data.holdings.fees.stable) > 0">
-                                            +{{ formatFull(item.data.holdings.fees.stable) }}
+                                            ${{ formatFull(item.data.holdings.fees.stable) }}
                                         </span>
                                     </span>
                                 </div>
@@ -208,7 +208,7 @@
                                     <span class="font-mono">
                                         {{ formatFull(item.data.holdings.liquidity.volatile) }}
                                         <span class="text-success ms-1 small" v-if="Number(item.data.holdings.fees.volatile) > 0">
-                                            +{{ formatFull(item.data.holdings.fees.volatile) }}
+                                            ${{ formatFull((item.data.holdings.fees.volatile*item.data.priceUsd).toFixed(8)) }}
                                         </span>
                                     </span>
                                 </div>
